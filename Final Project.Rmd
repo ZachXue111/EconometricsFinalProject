@@ -1,0 +1,121 @@
+---
+title: "Final Project"
+subtitle: Zachary Xue
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE, fig.align = "center")
+```
+
+### Part 1: 
+
+```{r datasets}
+
+library(readxl)
+
+
+# Reading in the datasets from Excel and converting them into data frame objects
+
+crime <- read_excel("C:/Users/zachx/OneDrive/Documents/Fall 2021 - Spring 2022/Spring 2022/Econometrics I/Final Project/FBI - Uniform Crime Reports.xlsx")
+crime_1 <- data.frame(crime)
+crime_1["rate"] <- crime_1$property.crime.total/crime_1$population # Adding the property crime rate variable
+
+disp_income <- read_excel("C:/Users/zachx/OneDrive/Documents/Fall 2021 - Spring 2022/Spring 2022/Econometrics I/Final Project/Personal Disposable Income Per Capita.xls")
+disp_income_1 <- data.frame(disp_income)
+
+employ_level <- read_excel("C:/Users/zachx/OneDrive/Documents/Fall 2021 - Spring 2022/Spring 2022/Econometrics I/Final Project/Employment Level.xls")
+employ_level_1 <- data.frame(employ_level)
+
+unemploy_rate <- read_excel("C:/Users/zachx/OneDrive/Documents/Fall 2021 - Spring 2022/Spring 2022/Econometrics I/Final Project/Unemployment Rate.xls")
+unemploy_rate_1 <- data.frame(unemploy_rate)
+
+gdp_capita <- read_excel("C:/Users/zachx/OneDrive/Documents/Fall 2021 - Spring 2022/Spring 2022/Econometrics I/Final Project/GDP Per Capita.xls")
+gdp_capita_1 <- data.frame(gdp_capita)
+
+
+
+# Creating a list of all data frames
+df_list <- list(crime_1, disp_income_1, employ_level_1, unemploy_rate_1, gdp_capita_1)
+
+# Creating a separate list to merge them
+df_list2 <- Reduce(function(x, y) merge(x, y, all=TRUE), df_list)
+
+# Selecting which specific columns to keep in the final list
+drops <- c("date", "rate", "disp_income", "employ", "UNRATE", "gdp")
+df_list2 <- df_list2[, names(df_list2) %in% drops]
+
+df_list2
+
+```
+
+
+### Part 2:
+
+``` {r regressions}
+
+library(ggplot2)
+library(dplyr)
+library(car)
+
+
+# Creating correlation matrix between all variables
+cor(df_list2, method = "pearson")
+
+# Plotting the scatterplot of disposable personal income vs. property crime rate
+ggplot(df_list2, aes(x = disp_income, y = rate, color = rate)) + geom_point() + theme_bw(base_size = 6) + labs(title = "Scatterplot of Real Personal Disposable Income vs. Property Crime Rate in the U.S. from 1960-2012", x = "Real Personal Disposable Income", y = "Property Crime Rate")
+
+
+# Adding in the squared and cubed versions of disposable personal income into the list 
+df_list2 <- mutate(df_list2, disp_income2 = disp_income^2, disp_income3 = disp_income^3)
+
+# Conducting a linear hypothesis test to see if the nonlinear specification is correct
+df_list2.lm <- lm(rate ~ disp_income + disp_income2 + disp_income3, data = df_list2)
+linearHypothesis(df_list2.lm, "disp_income2 = 0")
+
+fit <- lm(rate ~ disp_income + disp_income2 + disp_income3, data = df_list2)
+summary(fit)
+
+fit_mult <- lm(rate ~ disp_income + disp_income2 + disp_income3 + employ + gdp + UNRATE, data = df_list2)
+summary(fit_mult)
+
+fit_mult2 <- lm(rate ~ disp_income + disp_income2 + disp_income3 + employ + gdp, data = df_list2)
+summary(fit_mult2)
+
+
+```
+
+``` {r regressions2}
+
+library(aTSA)
+
+# Conducting autoregressions on the property crime rate variable 
+ar1 <- lm(rate ~ lag(rate), data = df_list2)
+ar2 <- lm(rate ~ lag(rate) + lag(rate, 2), data = df_list2)
+ar3 <- lm(rate ~ lag(rate) + lag(rate, 2) + lag(rate, 3), data = df_list2)
+ar4 <- lm(rate ~ lag(rate) + lag(rate, 2) + lag(rate, 3) + lag(rate, 4), data = df_list2)
+
+BIC(ar1)
+BIC(ar2) # Lowest value of BIC, so contains the correct number of lags
+BIC(ar3)
+BIC(ar4)
+
+# Find out how much the property crime rates of the previous two periods actually affect the current period
+summary(ar2)
+
+# See how an additional variable X and its lags affect the current period
+adl2 <- lm(rate ~ lag(rate) + lag(rate, 2) + lag(disp_income) + lag(disp_income, 2), data = df_list2)
+summary(adl2, vcov = vcovHAC)
+
+# See whether a stochastic trend around a linear point or line exists 
+adf.test(df_list2$rate, nlag = 2)
+
+```
+
+
+
+
